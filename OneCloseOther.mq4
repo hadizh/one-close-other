@@ -1,22 +1,14 @@
 /**
       One Close Other
-   The EA will execute the following pseudocode:
-   if any pending order is filled:
-      reset take profit on all market orders
-   if any take profit is reached:
-      cancel all pending orders
 **
 **/
 
 
 #property copyright Hadi Zhang
 
-extern int 
-
-int Slippage = 0;
-double pips;
-int pendingOrders;
-int marketOrders;
+extern int Slippage = 0;
+extern int Hedge = 10;
+extern int TakeProfit = 15;
 
 /**
   Expert initialization function
@@ -33,16 +25,20 @@ int init()
      }
     return 0;
     }
-   // Get pips info
-   if((MarketInfo(symbol,MODE_DIGITS)==2) || (MarketInfo(symbol,MODE_DIGITS)==3))
+
+   //Setup a virtual Point and Slippage
+   if(Digits == 5 || Digits == 3)
      {
-      pips=0.01;
-     }
-   if((MarketInfo(symbol,MODE_DIGITS)==4) || (MarketInfo(symbol,MODE_DIGITS)==5))
+      vPoint = Point * 10;
+      vSlippage = Slippage * 10;
+     } 
+   else 
      {
-      pips=0.0001;
+      vPoint = Point;
+      vSlippage = Slippage;
      }
-   return 0;
+ 
+  return 0;
   }
 
 /**
@@ -50,6 +46,7 @@ int init()
 **/
 int deinit()
   {
+  return 0;
   }
 
 /**
@@ -57,18 +54,76 @@ int deinit()
 **/
 int start()
   {
-   //Check if a pending order was filled
-   if 
+    static int HedgeOrders[];
 
-   //Check if a market order was 
+    int newHedgeOrders[];
+    ArrayResize(newHedgeOrders, OrdersTotal());
+    int newHedgeOrdersPointer = 0;
+
+    //Go through all of the HedgeOrders, check if they merit closing anything
+    for (int i = 0; i < ArraySize(HedgeOrders); i++)
+      {
+        if (!OrderSelect(HedgeOrders[i], SELECT_BY_TICKET)) continue;
+ 
+        int currentOrder = OrderTicket();
+        //If a pending Hedge Order has been filled, 
+        if (OrderType() == OP_BUY || OrderType() == OP_SELL) 
+          {
+            Alert("Hedge order #", currentOrder, " has been filled! The corresponding market order is #", OrderMagicNumber());
+          }
+
+        if (!OrderSelect(OrderMagicNumber(), SELECT_BY_TICKET)) continue;      
+        //If a pending Hedge Order's parent Order was closed
+        if (OrderCloseTime() > 0) 
+          {
+            OrderDelete(currentOrder);
+          }
+      } 
+
+    int ticket;
+    int numberHedgeOrders = 0;
+    //Go through all the valid market Orders and set each one to have a "HedgeStop" and TakeProfit
+    for (int i = OrdersTotal() - 1; i >= 0; --i)
+      {
+        if (!OrderSelect(i, SELECT_BY_POS)) continue;
+        if (OrderSymbol() != Symbol()) continue;
+
+        //Buy Orders setup
+        if (OrderType() == OP_BUY && OrderTakeProfit() == 0) 
+          {
+            if (!OrderModify(OrderTicket(), OrderOpenPrice(), 0, NormalizeDouble(OrderOpenPrice()+TakeProfit*vPoint, Digits), 0, Green)) continue;
+
+            //Create the new pending Hedge Order
+            if ((ticket = OrderSend(Symbol(), OP_SELL_STOP, OrderLots(), NormalizeDouble(Bid - Hedge*vPoint, Digits), vSlippage, 0, 0, NULL, OrderTicket(), 0, clrNONE)) != -1)
+              {
+                //Add to newHedgeOrders
+                newHedgeOrders[newHedgeOrderPointer] = ticket;
+                newHedgeOrderPointer++;                
+              }
+          }
+        
+        //Sell Orders setup
+        if (OrderType() == OP_SELL && OrderTakeProfit() == 0) 
+          {
+            if (!OrderModify(OrderTicket(), OrderOpenPrice(), 0, NormalizeDouble(OrderOpenPrice()-TakeProfit*vPoint, Digits), 0, Red)) continue; 
+
+            //Create the new pending Hedge Order
+            if ((ticket = OrderSend(Symbol(), OP_BUY_STOP, OrderLots(), NormalizeDouble(Bid + Hedge*vPoint, Digits), vSlippage, 0, 0, NULL, OrderTicket(), 0, clrNONE)
+              {
+                //Add to newHedgeOrders
+                newHedgeOrders[newHedgeOrderPointer] = ticket;
+                newHedgeOrderPointer++;
+              }
+          }
+
+        else
+          {
+            numberHedgeOrders += 1;
+          }
+      }
+    
+    //Copy newHedgeOrders into HedgeOrders
+    ArrayResize(newHedgeOrders, numberHedgeOrders);
+    ArrayResize(HedgeOrders, numberHedgeOrders);
+    ArrayCopy(HedgeOrders, newHedgeOrders, 0, 0, WHOLE_ARRAY);
   }
-
-/**
-  Cancel all pending orders
-**/
-
-
-
-/**
-  Set all take profits to zero
-**/
