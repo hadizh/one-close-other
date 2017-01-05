@@ -17,17 +17,6 @@ int vSlippage;
 **/
 int init()
   {
-   //Check if automated trading is allowed
-   if (!TerminalInfoInteger(TERMINAL_TRADE_ALLOWED))
-    {
-    Alert("EA is no longer allowed to perform automated trades.");
-    if (!MQLInfoInteger(MQL_TRADE_ALLOWED))
-     {
-      Alert("Automated trading is forbidden for this EA. Please enable live trading and try again.");
-     }
-    return 0;
-    }
-
    //Setup a virtual Point and Slippage
    if(Digits == 5 || Digits == 3)
      {
@@ -125,6 +114,7 @@ void cleanHedgeOrders(int& hedgeOrders[])
        if (OrderType() == OP_BUY || OrderType() == OP_SELL) 
          {
            Alert("Hedge order #", currentOrder, " has been filled! The corresponding market order is #", OrderMagicNumber());
+           ExpertRemove();
          }
 
        if (!OrderSelect(OrderMagicNumber(), SELECT_BY_TICKET)) continue;      
