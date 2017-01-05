@@ -113,25 +113,25 @@ int start()
     return 0;
   }
   
-  void cleanHedgeOrders(int& hedgeOrders[]) 
-    {
-      //Go through all of the HedgeOrders, check if they merit closing anything
-      for (int i = 0; i < ArraySize(hedgeOrders); i++)
-       {
-         if (!OrderSelect(hedgeOrders[i], SELECT_BY_TICKET)) continue;
- 
-         int currentOrder = OrderTicket();
-         //If a pending Hedge Order has been filled, 
-         if (OrderType() == OP_BUY || OrderType() == OP_SELL) 
-           {
-             Alert("Hedge order #", currentOrder, " has been filled! The corresponding market order is #", OrderMagicNumber());
-           }
+void cleanHedgeOrders(int& hedgeOrders[]) 
+  {
+    //Go through all of the HedgeOrders, check if they merit closing anything
+    for (int i = 0; i < ArraySize(hedgeOrders); i++)
+     {
+       if (!OrderSelect(hedgeOrders[i], SELECT_BY_TICKET)) continue;
 
-         if (!OrderSelect(OrderMagicNumber(), SELECT_BY_TICKET)) continue;      
-         //If a pending Hedge Order's parent Order was closed
-         if (OrderCloseTime() > 0) 
-           {
-             if (!OrderDelete(currentOrder)) Alert("Pending order #", currentOrder, " needs to be deleted manually!");
-           }
-       } 
-    }
+       int currentOrder = OrderTicket();
+       //If a pending Hedge Order has been filled, 
+       if (OrderType() == OP_BUY || OrderType() == OP_SELL) 
+         {
+           Alert("Hedge order #", currentOrder, " has been filled! The corresponding market order is #", OrderMagicNumber());
+         }
+
+       if (!OrderSelect(OrderMagicNumber(), SELECT_BY_TICKET)) continue;      
+       //If a pending Hedge Order's parent Order was closed
+       if (OrderCloseTime() > 0) 
+         {
+           if (!OrderDelete(currentOrder)) Alert("Pending order #", currentOrder, " needs to be deleted manually!");
+         }
+     } 
+  }
