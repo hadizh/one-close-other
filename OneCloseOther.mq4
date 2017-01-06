@@ -12,6 +12,7 @@ extern int TakeProfit = 15;
 
 double vPoint;
 int vSlippage;
+int HedgeOrders[];
 /**
   Expert initialization function
 **/
@@ -44,9 +45,7 @@ int deinit()
   Expert start function 
 **/
 int start()
-  {
-    static int HedgeOrders[];
-    
+  {   
     cleanHedgeOrders(HedgeOrders);
 
     int newHedgeOrders[];
