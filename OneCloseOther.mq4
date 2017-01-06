@@ -7,8 +7,8 @@
 #property copyright "Hadi Zhang"
 
 extern int Slippage = 0;
-extern int Hedge = 10;
-extern int TakeProfit = 15;
+extern int Hedge = 1;
+extern int TakeProfit = 1;
 
 double vPoint;
 int vSlippage;
@@ -52,73 +52,81 @@ int start()
     ArrayResize(newHedgeOrders, OrdersTotal());
     int newHedgeOrderPointer = 0;
     int newTicket;
-    int numberHedgeOrders = 0;
     
     //Go through all the valid market Orders and set each one to have a "HedgeStop" and TakeProfit
     for (int i = OrdersTotal() - 1; i >= 0; --i)
       {
         if (!OrderSelect(i, SELECT_BY_POS)) continue;
-        if (OrderSymbol() != Symbol()) continue;
+        //if (OrderSymbol() != Symbol()) continue;
 
-        //Buy Orders setup
-        if (OrderType() == OP_BUY && OrderTakeProfit() == 0) 
+        //Buy Orders setup (but only for our manually opened orders)
+        if (OrderType() == OP_BUY && OrderTakeProfit() == 0 && OrderMagicNumber() == 0) 
           {
             if (!OrderModify(OrderTicket(), OrderOpenPrice(), 0, NormalizeDouble(OrderOpenPrice()+TakeProfit*vPoint, Digits), 0, clrNONE)) continue;
 
             //Create the new pending Hedge Order
-            if ((newTicket = OrderSend(Symbol(), OP_SELLSTOP, OrderLots(), NormalizeDouble(Bid - Hedge*vPoint, Digits), vSlippage, 0, 0, NULL, OrderTicket(), 0, clrNONE)) != -1)
+            if ((newTicket = OrderSend(Symbol(), OP_SELLSTOP, OrderLots(), NormalizeDouble(OrderOpenPrice() - Hedge*vPoint, Digits), vSlippage, 0, 0, NULL, OrderTicket(), 0, clrNONE)) != -1)
               {
                 //Add to newHedgeOrders
                 newHedgeOrders[newHedgeOrderPointer] = newTicket;
-                newHedgeOrderPointer++;                
+                newHedgeOrderPointer++;    
+                //Print("newHedgeOrders[0] is ", newHedgeOrders[0]);            
               }
           }
         
-        //Sell Orders setup
-        else if (OrderType() == OP_SELL && OrderTakeProfit() == 0) 
+        //Sell Orders setup (but only for our manually opened orders)
+        else if (OrderType() == OP_SELL && OrderTakeProfit() == 0 && OrderMagicNumber() == 0) 
           {
             if (!OrderModify(OrderTicket(), OrderOpenPrice(), 0, NormalizeDouble(OrderOpenPrice()-TakeProfit*vPoint, Digits), 0, clrNONE)) continue; 
 
             //Create the new pending Hedge Order
-            if ((newTicket = OrderSend(Symbol(), OP_BUYSTOP, OrderLots(), NormalizeDouble(Ask + Hedge*vPoint, Digits), vSlippage, 0, 0, NULL, OrderTicket(), 0, clrNONE)) != -1)
+            if ((newTicket = OrderSend(Symbol(), OP_BUYSTOP, OrderLots(), NormalizeDouble(OrderOpenPrice() + Hedge*vPoint, Digits), vSlippage, 0, 0, NULL, OrderTicket(), 0, clrNONE)) != -1)
               {
-                //Add to newHedgeOrders
                 newHedgeOrders[newHedgeOrderPointer] = newTicket;
                 newHedgeOrderPointer++;
+                //Print("newHedgeOrders[0] is ", newHedgeOrders[0]);
               }
           }
         
         //If order has a magic number is not zero, then it must be a hedge order
         else if (OrderMagicNumber() != 0)
           {
-            numberHedgeOrders += 1;
+            newHedgeOrders[newHedgeOrderPointer] = OrderTicket();
+            newHedgeOrderPointer++;
           }
       }
     
     //Copy newHedgeOrders into HedgeOrders
-    ArrayResize(HedgeOrders, numberHedgeOrders);
-    ArrayCopy(HedgeOrders, newHedgeOrders, 0, 0, numberHedgeOrders);
+    ArrayResize(HedgeOrders, newHedgeOrderPointer);
+    ArrayCopy(HedgeOrders, newHedgeOrders, 0, 0, newHedgeOrderPointer);
+    //Print("newHedgeOrders first is ", newHedgeOrders[0]);
+    //Print("HedgeOrders first is ", HedgeOrders[0]);
     return 0;
   }
   
 void cleanHedgeOrders(int& hedgeOrders[]) 
   {
+    //Print("Size of HedgeOrders is ", ArraySize(hedgeOrders));
+    //Print("First Hedge Order is  ", hedgeOrders[0]);
+    int currentOrder;
     //Go through all of the HedgeOrders, check if they merit closing anything
     for (int i = 0; i < ArraySize(hedgeOrders); i++)
      {
        if (!OrderSelect(hedgeOrders[i], SELECT_BY_TICKET)) continue;
 
-       int currentOrder = OrderTicket();
-       //If a pending Hedge Order has been filled, 
+       currentOrder = OrderTicket();
+       //If a pending Hedge Order has been filled, reset TP of parent Market Order
        if (OrderType() == OP_BUY || OrderType() == OP_SELL) 
          {
            Alert("Hedge order #", currentOrder, " has been filled! The corresponding market order is #", OrderMagicNumber());
+           OrderSelect(OrderMagicNumber(), SELECT_BY_TICKET);
+           OrderModify(OrderTicket(), OrderOpenPrice(), 0, 0, 0, clrNONE);
            ExpertRemove();
          }
 
        if (!OrderSelect(OrderMagicNumber(), SELECT_BY_TICKET)) continue;      
-       //If a pending Hedge Order's parent Order was closed
-       if (OrderCloseTime() > 0) 
+       //If a pending Hedge Order's parent Order was closed, delete the pending Hedge Order
+       if (OrderCloseTime() != 0) 
          {
            if (!OrderDelete(currentOrder)) Alert("Pending order #", currentOrder, " needs to be deleted manually!");
          }
