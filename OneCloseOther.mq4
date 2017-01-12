@@ -60,7 +60,7 @@ int start()
         //if (OrderSymbol() != Symbol()) continue;
 
         //Buy Orders setup (but only for our manually opened orders)
-        if (OrderType() == OP_BUY && OrderTakeProfit() == 0 && OrderMagicNumber() == 0) 
+        if (OrderType() == OP_BUY && OrderTakeProfit() == 0 && !wasHedgeOrder(HedgeOrders, OrderTicket())) 
           {
             if (!OrderModify(OrderTicket(), OrderOpenPrice(), 0, NormalizeDouble(OrderOpenPrice()+TakeProfit*vPoint, Digits), 0, clrNONE)) continue;
 
@@ -75,7 +75,7 @@ int start()
           }
         
         //Sell Orders setup (but only for our manually opened orders)
-        else if (OrderType() == OP_SELL && OrderTakeProfit() == 0 && OrderMagicNumber() == 0) 
+        else if (OrderType() == OP_SELL && OrderTakeProfit() == 0 && !wasHedgeOrder(HedgeOrders, OrderTicket())) 
           {
             if (!OrderModify(OrderTicket(), OrderOpenPrice(), 0, NormalizeDouble(OrderOpenPrice()-TakeProfit*vPoint, Digits), 0, clrNONE)) continue; 
 
@@ -89,7 +89,7 @@ int start()
           }
         
         //If order has a magic number is not zero, then it must be a hedge order
-        else if (OrderMagicNumber() != 0)
+        else if (wasHedgeOrder(HedgeOrders, OrderTicket()))
           {
             newHedgeOrders[newHedgeOrderPointer] = OrderTicket();
             newHedgeOrderPointer++;
@@ -119,8 +119,7 @@ void cleanHedgeOrders(int& hedgeOrders[])
        if (OrderType() == OP_BUY || OrderType() == OP_SELL) 
          {
            Alert("Hedge order #", currentOrder, " has been filled! The corresponding market order is #", OrderMagicNumber());
-           OrderSelect(OrderMagicNumber(), SELECT_BY_TICKET);
-           OrderModify(OrderTicket(), OrderOpenPrice(), 0, 0, 0, clrNONE);
+           clearAllTakeProfits();
            ExpertRemove();
          }
 
@@ -131,4 +130,25 @@ void cleanHedgeOrders(int& hedgeOrders[])
            if (!OrderDelete(currentOrder)) Alert("Pending order #", currentOrder, " needs to be deleted manually!");
          }
      } 
+  }
+ 
+bool wasHedgeOrder(int& hedgeOrders[], int ticket)
+  {
+    for (int i = 0; i < ArraySize(hedgeOrders); i++)
+      {
+        if (ticket == hedgeOrders[i]) return true;
+      }
+      return false;
+  }
+  
+void clearAllTakeProfits() 
+  {
+    for (int i = OrdersTotal() - 1; i >= 0; --i)
+      {
+        if (!OrderSelect(i, SELECT_BY_POS)) continue;
+        if (OrderType() == OP_BUY || OrderType() == OP_SELL)
+          {
+            if (!OrderModify(OrderTicket(), OrderOpenPrice(), 0, 0, 0, clrNONE) continue;
+          }
+      }
   }
