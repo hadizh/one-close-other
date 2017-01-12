@@ -134,8 +134,9 @@ class HashTable
   
 double vPoint;
 int vSlippage;
-int HedgeOrders[];
-HashTable processedOrders = new HashTable();
+
+int PrevOrders[];
+HashTable *ProcessedOrders = new HashTable();
 
 /**
   Expert initialization function
@@ -153,7 +154,7 @@ int init()
       vPoint = Point;
       vSlippage = Slippage;
      }
- 
+
   return 0;
   }
 
@@ -162,7 +163,7 @@ int init()
 **/
 int deinit()
   {
-  delete processedOrders;
+  delete ProcessedOrders;
   return 0;
   }
 
@@ -170,12 +171,13 @@ int deinit()
   Expert start function 
 **/
 int start()
-  {   
-    cleanHedgeOrders(HedgeOrders);
+  { 
+    //Clean previous orders
+    cleanPrevOrders(PrevOrders, ProcessedOrders);     
 
-    int newHedgeOrders[];
-    ArrayResize(newHedgeOrders, OrdersTotal());
-    int newHedgeOrderPointer = 0;
+    int newOrders[];
+    ArrayResize(newOrders, OrdersTotal());
+    int newOrdersPointer = 0;
     int newTicket;
     
     //Go through all the valid market Orders and set each one to have a "HedgeStop" and TakeProfit
@@ -185,52 +187,63 @@ int start()
         if (OrderSymbol() != Symbol()) continue;
 
         //Buy Orders setup (but only for our manually opened orders)
-        if (OrderType() == OP_BUY && !processedOrders.get(OrderTicket())) 
+        if (OrderType() == OP_BUY && !ProcessedOrders.get(OrderTicket())) 
           {
             if (!OrderModify(OrderTicket(), OrderOpenPrice(), 0, NormalizeDouble(OrderOpenPrice()+TakeProfit*vPoint, Digits), 0, clrNONE)) continue;
-            processedOrders.put(OrderTicket());
+            ProcessedOrders.put(OrderTicket());
 
             //Create the new pending Hedge Order
             if ((newTicket = OrderSend(Symbol(), OP_SELLSTOP, OrderLots(), NormalizeDouble(OrderOpenPrice() - Hedge*vPoint, Digits), vSlippage, 0, 0, NULL, OrderTicket(), 0, clrNONE)) != -1)
               {
-                //Add to newHedgeOrders
-                newHedgeOrders[newHedgeOrderPointer] = newTicket;
-                newHedgeOrderPointer++;    
-                //Print("newHedgeOrders[0] is ", newHedgeOrders[0]);            
+                ProcessedOrders.put(newTicket);
+                newOrders[newOrdersPointer] = newTicket;
+                newOrdersPointer++;   
               }
           }
         
         //Sell Orders setup (but only for our manually opened orders)
-        else if (OrderType() == OP_SELL && !processedOrders.get(OrderTicket())) 
+        else if (OrderType() == OP_SELL && !ProcessedOrders.get(OrderTicket())) 
           {
             if (!OrderModify(OrderTicket(), OrderOpenPrice(), 0, NormalizeDouble(OrderOpenPrice()-TakeProfit*vPoint, Digits), 0, clrNONE)) continue; 
-            processedOrders.put(OrderTicket());
+            ProcessedOrders.put(OrderTicket());
 
             //Create the new pending Hedge Order
             if ((newTicket = OrderSend(Symbol(), OP_BUYSTOP, OrderLots(), NormalizeDouble(OrderOpenPrice() + Hedge*vPoint, Digits), vSlippage, 0, 0, NULL, OrderTicket(), 0, clrNONE)) != -1)
               {
-                newHedgeOrders[newHedgeOrderPointer] = newTicket;
-                newHedgeOrderPointer++;
-                //Print("newHedgeOrders[0] is ", newHedgeOrders[0]);
+                ProcessedOrders.put(newTicket);
+                newOrders[newOrdersPointer] = newTicket;
+                newOrdersPointer++;
               }
           }
         
-        //If order has a magic number is not zero, then it must be a hedge order
-        else if (OrderMagicNumber() != 0)
+        //If order was processed, just add it back onto the newOrders array
+        else if (ProcessedOrders.get(OrderTicket()))
           {
-            newHedgeOrders[newHedgeOrderPointer] = OrderTicket();
-            newHedgeOrderPointer++;
+              newOrders[newOrdersPointer] = newTicket;
+              newOrdersPointer++;
           }
       }
-    
-    //Copy newHedgeOrders into HedgeOrders
-    ArrayResize(HedgeOrders, newHedgeOrderPointer);
-    ArrayCopy(HedgeOrders, newHedgeOrders, 0, 0, newHedgeOrderPointer);
-    //Print("newHedgeOrders first is ", newHedgeOrders[0]);
-    //Print("HedgeOrders first is ", HedgeOrders[0]);
+    //Copy newOrders into prevOrders
+    ArrayResize(PrevOrders, OrdersTotal());
+    ArrayCopy(PrevOrders, newOrders, 0, 0, WHOLE_ARRAY);
     return 0;
   }
   
+void cleanPrevOrders(int& prevOrders[], HashTable& processedOrders)
+  {
+    //Try selecting the prevOrder by ticket number, check the close time
+    //If the close time is not 0 or the order no longer exists, then it must be gone
+    //Delete the order from the processedOrders
+    for (int i = 0; i < ArraySize(prevOrders); i++)
+      {
+       if (!OrderSelect(prevOrders[i], SELECT_BY_TICKET)) continue;
+       if (OrderCloseTime() != 0)
+         {
+           processedOrders.remove(OrderTicket());
+         }
+      }
+  }
+/**  
 void cleanHedgeOrders(int& hedgeOrders[]) 
   {
     //Print("Size of HedgeOrders is ", ArraySize(hedgeOrders));
@@ -259,3 +272,4 @@ void cleanHedgeOrders(int& hedgeOrders[])
          }
      } 
   }
+ **/
