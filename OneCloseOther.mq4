@@ -3,7 +3,6 @@
 **
 **/
 
-
 #property copyright "Hadi Zhang"
 
 extern int Slippage = 0;
@@ -13,6 +12,123 @@ extern int TakeProfit = 1;
 double vPoint;
 int vSlippage;
 int HedgeOrders[];
+
+class IntList
+  {
+    private:
+      struct Node
+        {
+          int value;
+          Node* next;
+        };
+      Node* head;
+      Node* tail;
+      int length;
+      
+    public:
+       IntList()
+         {
+           head = new Node;
+           head->next = NULL;
+           tail = head;
+           length = 0;
+         }
+       void addInt(int value)
+         {
+           tail->next = new Node;
+           tail->next->value = value;
+           tail->next->next = NULL;
+           tail = tail->next;
+           length++;
+         }
+       bool removeInt(int value)
+         {
+           Node* prev = head;
+           Node* tmp = head;
+           while (tmp) 
+             {
+               if (tmp->value == value) 
+                 {
+                   if ((prev->next = tmp->next) == NULL) tail = prev;
+                   delete tmp;
+                   length--;
+                   return true;
+                  }
+                prev = tmp;
+                tmp = prev->next;
+              }
+            return false;                   
+         }
+       bool hasInt(int value)
+         {
+           Node* curr = head->next;
+           while (curr) 
+             {
+               if (curr->value == value) return true;
+               curr = curr->next;
+             }
+           return false;
+         }
+       ~IntList()
+         {
+           Node* prev = head;
+           Node* tmp = head;
+           while (tmp) 
+             {
+               prev = tmp;
+               tmp = prev->tmp;
+               if (tmp) delete prev;
+             }
+         }
+   };
+
+
+class HashTable
+  {
+    private:
+      int length;
+      IntList* arr;
+      
+/**
+      void resize(int newLength) 
+        {
+          //Copy old table
+          int oldTable[length];
+          for (int i = 0; i < length; i++)
+            {
+              oldTable[i] 
+            }
+          //Reassign old table to new cells
+          arr = new IntList 
+        }
+**/
+
+    public:
+      HashTable() 
+        {
+          length = 11;
+          arr = new IntList[length];
+        }
+      void put(int key)
+        {
+          bool retval = arr[key % length].addInt(key);          
+          return retval;
+        }
+      bool remove(int key)
+        {
+          bool retval = arr[key % length].removeInt(key);
+          return retval;
+        }
+      bool get(int key)
+        {
+          return arr[key % length].hasInt(key);
+        }
+      ~HashTable()
+        {
+          delete[] arr;
+        }
+  };
+
 /**
   Expert initialization function
 **/
@@ -51,16 +167,18 @@ int start()
     int newHedgeOrders[];
     ArrayResize(newHedgeOrders, OrdersTotal());
     int newHedgeOrderPointer = 0;
+    bool processed;
     int newTicket;
     
     //Go through all the valid market Orders and set each one to have a "HedgeStop" and TakeProfit
     for (int i = OrdersTotal() - 1; i >= 0; --i)
       {
         if (!OrderSelect(i, SELECT_BY_POS)) continue;
-        //if (OrderSymbol() != Symbol()) continue;
+        if (OrderSymbol() != Symbol()) continue;
+        processed = checkProcessed(OrderTicket(), 
 
         //Buy Orders setup (but only for our manually opened orders)
-        if (OrderType() == OP_BUY && OrderTakeProfit() == 0 && OrderMagicNumber() == 0) 
+        if (OrderType() == OP_BUY) 
           {
             if (!OrderModify(OrderTicket(), OrderOpenPrice(), 0, NormalizeDouble(OrderOpenPrice()+TakeProfit*vPoint, Digits), 0, clrNONE)) continue;
 
