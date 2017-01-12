@@ -9,17 +9,14 @@ extern int Slippage = 0;
 extern int Hedge = 1;
 extern int TakeProfit = 1;
 
-double vPoint;
-int vSlippage;
-int HedgeOrders[];
-
 class IntList
   {
     private:
-      struct Node
+      class Node
         {
-          int value;
-          Node* next;
+          public:
+            int value;
+            Node* next;           
         };
       Node* head;
       Node* tail;
@@ -29,16 +26,16 @@ class IntList
        IntList()
          {
            head = new Node;
-           head->next = NULL;
+           head.next = NULL;
            tail = head;
            length = 0;
          }
        void addInt(int value)
          {
-           tail->next = new Node;
-           tail->next->value = value;
-           tail->next->next = NULL;
-           tail = tail->next;
+           tail.next = new Node;
+           tail.next.value = value;
+           tail.next.next = NULL;
+           tail = tail.next;
            length++;
          }
        bool removeInt(int value)
@@ -47,25 +44,25 @@ class IntList
            Node* tmp = head;
            while (tmp) 
              {
-               if (tmp->value == value) 
+               if (tmp.value == value) 
                  {
-                   if ((prev->next = tmp->next) == NULL) tail = prev;
+                   if ((prev.next = tmp.next) == NULL) tail = prev;
                    delete tmp;
                    length--;
                    return true;
                   }
                 prev = tmp;
-                tmp = prev->next;
+                tmp = prev.next;
               }
             return false;                   
          }
        bool hasInt(int value)
          {
-           Node* curr = head->next;
+           Node* curr = head.next;
            while (curr) 
              {
-               if (curr->value == value) return true;
-               curr = curr->next;
+               if (curr.value == value) return true;
+               curr = curr.next;
              }
            return false;
          }
@@ -76,7 +73,7 @@ class IntList
            while (tmp) 
              {
                prev = tmp;
-               tmp = prev->tmp;
+               tmp = prev.next;
                if (tmp) delete prev;
              }
          }
@@ -87,7 +84,7 @@ class HashTable
   {
     private:
       int length;
-      IntList* arr;
+      IntList* arr[];
       
 /**
       void resize(int newLength) 
@@ -107,12 +104,15 @@ class HashTable
       HashTable() 
         {
           length = 11;
-          arr = new IntList[length];
+          ArrayResize(arr, length);
+          for (int i = 0; i < length; i++)
+            {
+              arr[i] = new IntList();
+            }
         }
       void put(int key)
         {
-          bool retval = arr[key % length].addInt(key);          
-          return retval;
+          arr[key % length].addInt(key);          
         }
       bool remove(int key)
         {
@@ -125,9 +125,17 @@ class HashTable
         }
       ~HashTable()
         {
-          delete[] arr;
+          for (int i = 0; i < length; i++) 
+            {
+              delete arr[i];
+            }
         }
   };
+  
+double vPoint;
+int vSlippage;
+int HedgeOrders[];
+HashTable processedOrders = new HashTable();
 
 /**
   Expert initialization function
@@ -154,6 +162,7 @@ int init()
 **/
 int deinit()
   {
+  delete processedOrders;
   return 0;
   }
 
@@ -167,7 +176,6 @@ int start()
     int newHedgeOrders[];
     ArrayResize(newHedgeOrders, OrdersTotal());
     int newHedgeOrderPointer = 0;
-    bool processed;
     int newTicket;
     
     //Go through all the valid market Orders and set each one to have a "HedgeStop" and TakeProfit
@@ -175,12 +183,12 @@ int start()
       {
         if (!OrderSelect(i, SELECT_BY_POS)) continue;
         if (OrderSymbol() != Symbol()) continue;
-        processed = checkProcessed(OrderTicket(), 
 
         //Buy Orders setup (but only for our manually opened orders)
-        if (OrderType() == OP_BUY) 
+        if (OrderType() == OP_BUY && !processedOrders.get(OrderTicket())) 
           {
             if (!OrderModify(OrderTicket(), OrderOpenPrice(), 0, NormalizeDouble(OrderOpenPrice()+TakeProfit*vPoint, Digits), 0, clrNONE)) continue;
+            processedOrders.put(OrderTicket());
 
             //Create the new pending Hedge Order
             if ((newTicket = OrderSend(Symbol(), OP_SELLSTOP, OrderLots(), NormalizeDouble(OrderOpenPrice() - Hedge*vPoint, Digits), vSlippage, 0, 0, NULL, OrderTicket(), 0, clrNONE)) != -1)
@@ -193,9 +201,10 @@ int start()
           }
         
         //Sell Orders setup (but only for our manually opened orders)
-        else if (OrderType() == OP_SELL && OrderTakeProfit() == 0 && OrderMagicNumber() == 0) 
+        else if (OrderType() == OP_SELL && !processedOrders.get(OrderTicket())) 
           {
             if (!OrderModify(OrderTicket(), OrderOpenPrice(), 0, NormalizeDouble(OrderOpenPrice()-TakeProfit*vPoint, Digits), 0, clrNONE)) continue; 
+            processedOrders.put(OrderTicket());
 
             //Create the new pending Hedge Order
             if ((newTicket = OrderSend(Symbol(), OP_BUYSTOP, OrderLots(), NormalizeDouble(OrderOpenPrice() + Hedge*vPoint, Digits), vSlippage, 0, 0, NULL, OrderTicket(), 0, clrNONE)) != -1)
