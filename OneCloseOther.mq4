@@ -74,6 +74,11 @@ int start()
                 newHedgeOrderPointer++;    
                 //Print("newHedgeOrders[0] is ", newHedgeOrders[0]);            
               }
+            //If the new pending Hedge Order doesn't work, reset the TakeProfit on the order
+            else if (newTicket == -1)
+              {
+                if (!OrderModify(OrderTicket(), OrderOpenPrice(), 0, 0, 0, clrNONE)) continue;
+              }
           }
         
         //Sell Orders setup (but only for our manually opened orders)
@@ -88,9 +93,14 @@ int start()
                 newHedgeOrderPointer++;
                 //Print("newHedgeOrders[0] is ", newHedgeOrders[0]);
               }
+            //If the new pending Hedge Order doesn't work, reset the TakeProfit on the order
+            else if (newTicket == -1)
+              {
+                if (!OrderModify(OrderTicket(), OrderOpenPrice(), 0, 0, 0, clrNONE)) continue;
+              }
           }
         
-        //If order has a magic number is not zero, then it must be a hedge order
+        //If order was a hedge order, simply add it back to the list of new HedgeOrders
         else if (wasHedgeOrder(HedgeOrders, OrderTicket()))
           {
             newHedgeOrders[newHedgeOrderPointer] = OrderTicket();
