@@ -9,6 +9,7 @@
 extern int Slippage = 0;
 extern int Hedge = 10;
 extern int TakeProfit = 10;
+extern int TrailRatio = 5;
 
 double vPoint;
 int vSlippage;
@@ -29,6 +30,7 @@ int init()
       vPoint = Point;
       vSlippage = Slippage;
      }
+   if (TrailRatio <= 1) Alert("TrailRatio is too small! TrailRatio must be greater than 2");
  
   return 0;
   }
@@ -48,6 +50,12 @@ int start()
   { 
     //Create a halt flag based on whether a pending hedge order was filled   
     bool halt = cleanHedgeOrders(HedgeOrders);
+    //Check halt flag for resetting all TakeProfits
+    if (halt)
+      {
+        clearAllTakeProfits();
+        ExpertRemove();
+      }
 
     int newHedgeOrders[];
     ArrayResize(newHedgeOrders, OrdersTotal());
@@ -60,7 +68,9 @@ int start()
         if (!OrderSelect(i, SELECT_BY_POS)) continue;
         if (OrderSymbol() != Symbol()) continue;
         if (halt) continue;
-
+        
+        autoTrail(OrderTicket());
+        
         //Buy Orders setup (but only for our manually opened orders)
         if (OrderType() == OP_BUY && OrderTakeProfit() == 0 && !wasHedgeOrder(HedgeOrders, OrderTicket())) 
           {
@@ -107,18 +117,40 @@ int start()
             newHedgeOrderPointer++;
           }
       }
+      
+    //Needs to be cleaned again to delete pending orders without waiting for a new Tick
+    cleanHedgeOrders(HedgeOrders);
     
     //Copy newHedgeOrders into HedgeOrders
     ArrayResize(HedgeOrders, newHedgeOrderPointer);
     ArrayCopy(HedgeOrders, newHedgeOrders, 0, 0, newHedgeOrderPointer);
-    //Check halt flag for resetting all TakeProfits
-    if (halt)
-      {
-        clearAllTakeProfits();
-        ExpertRemove();
-      }
     return 0;
   }
+  
+void autoTrail(int ticket) 
+  {
+    double potentialStopLoss;
+    double changeInPrice;
+    double changeInStopLoss;
+    
+    //TakeProfit checking for buy orders
+    if (OrderType() == OP_BUY && (changeInPrice = Ask - OrderOpenPrice()) > (TrailRatio * vPoint))
+      {
+        changeInStopLoss = changeInPrice / TrailRatio;
+        potentialStopLoss = NormalizeDouble(OrderOpenPrice() + changeInStopLoss, Digits);
+        //Only change stop loss if it is higher than the current stop loss
+        if (potentialStopLoss > OrderStopLoss()) OrderModify(OrderTicket(), OrderOpenPrice(), potentialStopLoss, OrderTakeProfit(), 0, clrNONE);
+      }
+      
+    //TakeProfit checking for sell orders
+    if (OrderType() == OP_SELL && (changeInPrice = OrderOpenPrice() - Bid) > (TrailRatio * vPoint))
+      {
+        changeInStopLoss = changeInPrice / TrailRatio;
+        potentialStopLoss = NormalizeDouble(OrderOpenPrice() - changeInStopLoss, Digits);
+        //Only change stop loss if it is lower than the current stop loss
+        if (potentialStopLoss < OrderStopLoss()) OrderModify(OrderTicket(), OrderOpenPrice(), potentialStopLoss, OrderTakeProfit(), 0 , clrNONE);
+      }
+  }  
   
 bool cleanHedgeOrders(int& hedgeOrders[]) 
   {
@@ -140,10 +172,11 @@ bool cleanHedgeOrders(int& hedgeOrders[])
 
        if (!OrderSelect(OrderMagicNumber(), SELECT_BY_TICKET)) continue;      
        //If a pending Hedge Order's parent Order was closed, delete the pending Hedge Order
-       if (OrderCloseTime() != 0) 
+       //If a pending Hedge Order's parent Order has both a StopLoss and a TakeProfit, also delete
+       if (OrderCloseTime() != 0 || (OrderTakeProfit() > 0 && OrderStopLoss() > 0)) 
          {
            if (!OrderDelete(currentOrder)) Alert("Pending order #", currentOrder, " needs to be deleted manually!");
-         }
+         }         
      } 
      return false;
   }
