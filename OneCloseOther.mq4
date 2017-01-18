@@ -124,6 +124,13 @@ int start()
     //Copy newHedgeOrders into HedgeOrders
     ArrayResize(HedgeOrders, newHedgeOrderPointer);
     ArrayCopy(HedgeOrders, newHedgeOrders, 0, 0, newHedgeOrderPointer);
+    
+    //Check halt flag for resetting all TakeProfits
+    if (halt)
+      {
+        clearAllTakeProfits();
+        ExpertRemove();
+      }
     return 0;
   }
   
