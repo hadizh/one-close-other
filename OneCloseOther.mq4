@@ -69,7 +69,8 @@ int start()
         if (OrderSymbol() != Symbol()) continue;
         if (halt) continue;
         
-        autoTrail(OrderTicket());
+        //Autotrail but only for non-hedge orders
+        if (!wasHedgeOrder) autoTrail(OrderTicket());
         
         //Buy Orders setup (but only for our manually opened orders)
         if (OrderType() == OP_BUY && OrderTakeProfit() == 0 && !wasHedgeOrder(HedgeOrders, OrderTicket())) 
